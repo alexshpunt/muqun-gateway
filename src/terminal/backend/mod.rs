@@ -5,6 +5,7 @@
 //! not leak through this boundary.
 
 mod herdr;
+mod herdr_core;
 mod keys;
 mod model;
 mod process_identity;
@@ -15,6 +16,7 @@ mod tmux_wire;
 pub mod compat;
 
 pub use herdr::HerdrBackend;
+pub use herdr_core::HerdrCoreBackend;
 pub use keys::KeyboardVocabulary;
 #[cfg(test)]
 pub use keys::NamedKey;

@@ -296,6 +296,7 @@ pub(crate) fn upsert_backend_session(
     let label = label.unwrap_or_else(|| default_backend_label(backend).to_owned());
     validate_label(&label)?;
     config.sessions.push(SessionConfig {
+        core_command: Vec::new(),
         id: id.clone(),
         label,
         socket_path: socket_path.unwrap_or_else(|| default_backend_socket(backend)),
@@ -1064,6 +1065,7 @@ mod tests {
         assert!(serde_json::to_value(&old).unwrap().get("backend").is_none());
 
         let tmux = SessionConfig {
+            core_command: Vec::new(),
             id: "default".into(),
             label: "Default".into(),
             socket_path: String::new(),
@@ -1116,6 +1118,7 @@ mod tests {
     fn adding_a_backend_preserves_the_primary_session_and_is_idempotent() {
         let mut config = test_config("token");
         config.sessions[0] = SessionConfig {
+            core_command: Vec::new(),
             id: "default".into(),
             label: "tmux".into(),
             socket_path: String::new(),
@@ -1152,6 +1155,7 @@ mod tests {
     fn choosing_a_default_backend_only_reorders_sessions() {
         let mut config = test_config("token");
         config.sessions.push(SessionConfig {
+            core_command: Vec::new(),
             id: "tmux".into(),
             label: "Local tmux".into(),
             socket_path: String::new(),
@@ -1198,6 +1202,7 @@ mod tests {
     fn an_existing_tmux_install_stays_tmux_when_backend_is_left_off() {
         let mut tmux_only = test_config("token");
         tmux_only.sessions[0] = SessionConfig {
+            core_command: Vec::new(),
             id: "default".into(),
             label: "tmux".into(),
             socket_path: String::new(),
@@ -1306,6 +1311,7 @@ mod tests {
         let mut standalone = test_config("tmux-token");
         standalone.server_id = "discarded-tmux-identity".into();
         standalone.sessions[0] = SessionConfig {
+            core_command: Vec::new(),
             id: "default".into(),
             label: "tmux".into(),
             socket_path: String::new(),

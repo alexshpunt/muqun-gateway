@@ -37,6 +37,7 @@ pub(crate) fn test_config(token: &str) -> Config {
         transport_encryption: TransportEncryptionMode::Disabled,
         dev_unauthenticated: false,
         sessions: vec![SessionConfig {
+            core_command: Vec::new(),
             id: "default".into(),
             label: "Default".into(),
             socket_path: "/tmp/herdr.sock".into(),
@@ -823,6 +824,7 @@ impl FakeHerdr {
 
     pub(crate) fn session(&self) -> SessionConfig {
         SessionConfig {
+            core_command: Vec::new(),
             id: "default".into(),
             label: "Default".into(),
             socket_path: self.socket_path.to_string_lossy().into_owned(),
@@ -922,6 +924,7 @@ impl FakePaneListHerdr {
 
     pub(crate) fn session(&self, id: &str) -> SessionConfig {
         SessionConfig {
+            core_command: Vec::new(),
             id: id.into(),
             label: id.into(),
             socket_path: self.socket_path.to_string_lossy().into_owned(),
@@ -952,6 +955,7 @@ pub(crate) fn session_ids(response: &Value) -> Vec<String> {
 
 pub(crate) fn liveness_session(id: &str, backend: BackendKind) -> SessionConfig {
     SessionConfig {
+        core_command: Vec::new(),
         id: id.into(),
         label: id.into(),
         socket_path: String::new(),

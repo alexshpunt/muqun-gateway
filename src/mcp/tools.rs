@@ -1446,8 +1446,16 @@ mod tests {
                 held.push(socket);
             }
         });
-        // nas never answered: nothing is known of it yet; pinged, 127.0.0.1:9 refuses at once.
-        let refused = "http://127.0.0.1:9".to_owned();
+        // A fixed closed port can be filtered instead of refused (including
+        // localhost forwarding in WSL). Accept and close on our own listener
+        // to exercise a real connection failure without a network timeout.
+        let reset = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let refused = format!("http://{}", reset.local_addr().unwrap());
+        tokio::spawn(async move {
+            while let Ok((socket, _)) = reset.accept().await {
+                drop(socket);
+            }
+        });
         // gone answered invalid_token last: not offline, unauthorized.
         for (id, name, seen, url, unauthorized) in [
             ("srv-mini", "mini", Some(now), &refused, false),

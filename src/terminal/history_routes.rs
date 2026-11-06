@@ -775,6 +775,7 @@ mod tests {
         );
         let mut state = test_state("admin", vec![test_device("d", "token")]);
         state.config.sessions = vec![SessionConfig {
+            core_command: Vec::new(),
             id: "s".into(),
             label: "isolated".into(),
             backend: BackendKind::Tmux,

@@ -203,7 +203,7 @@ impl TerminalBackendFeatures {
     /// serves nothing.
     pub(crate) fn for_backend(kind: BackendKind, connected: bool) -> Self {
         Self {
-            paged_history: connected,
+            paged_history: connected && kind != BackendKind::HerdrCore,
             range_reads: connected && kind == BackendKind::Tmux,
         }
     }

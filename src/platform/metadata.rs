@@ -273,6 +273,9 @@ pub(crate) fn session_capabilities(
     connected: bool,
     version: Option<&str>,
 ) -> Vec<&'static str> {
+    if connected && kind == BackendKind::HerdrCore {
+        return vec!["native_herdr_core_v1"];
+    }
     if connected
         && kind == BackendKind::Herdr
         && backend::version_at_least(version, HERDR_COLLABORATION_MIN)
@@ -522,8 +525,8 @@ pub(crate) async fn backend_metadata(
             // A backend that does not report a protocol at all is taken at the
             // floor rather than refused: absent is not the same as too old.
             let compatibility_protocol = metadata.protocol.unwrap_or(HERDR_PROTOCOL_MIN);
-            let compatible = metadata.kind == BackendKind::Tmux
-                || herdr_protocol_supported(compatibility_protocol);
+            let compatible =
+                !metadata.kind.is_herdr() || herdr_protocol_supported(compatibility_protocol);
             let mut compatibility = json!({
                 "connected": true,
                 "version": metadata.version,
@@ -963,6 +966,7 @@ mod tests {
         let mut state = test_state("admin", vec![test_device("d1", "token")]);
         state.config.sessions = vec![
             SessionConfig {
+                core_command: Vec::new(),
                 id: "tmux-dead".into(),
                 label: "tmux".into(),
                 socket_path: std::env::temp_dir()
@@ -1002,6 +1006,7 @@ mod tests {
         let mut state = test_state("admin", vec![test_device("d1", "token")]);
         state.config.sessions = vec![
             SessionConfig {
+                core_command: Vec::new(),
                 id: "tmux-dead".into(),
                 label: "tmux".into(),
                 socket_path: std::env::temp_dir()
@@ -1025,6 +1030,7 @@ mod tests {
     async fn sessions_endpoint_keeps_every_session_when_nothing_is_reachable() {
         let mut state = unreachable_state();
         state.config.sessions.push(SessionConfig {
+            core_command: Vec::new(),
             id: "tmux-also-dead".into(),
             label: "tmux".into(),
             socket_path: std::env::temp_dir()
@@ -1071,6 +1077,7 @@ mod tests {
         let mut state = test_state("admin", vec![test_device("d1", "token")]);
         state.config.sessions = vec![
             SessionConfig {
+                core_command: Vec::new(),
                 id: "tmux-dead".into(),
                 label: "tmux".into(),
                 socket_path: std::env::temp_dir()
@@ -1100,6 +1107,7 @@ mod tests {
         state.config.sessions = vec![
             empty_herdr.session("empty"),
             SessionConfig {
+                core_command: Vec::new(),
                 id: "dead".into(),
                 label: "dead".into(),
                 socket_path: std::env::temp_dir()
@@ -1150,6 +1158,7 @@ mod tests {
         let mut state = test_state("admin", vec![test_device("d1", "token")]);
         state.config.sessions = vec![
             SessionConfig {
+                core_command: Vec::new(),
                 id: "herdr-dead".into(),
                 label: "herdr".into(),
                 socket_path: std::env::temp_dir()
@@ -1159,6 +1168,7 @@ mod tests {
                 backend: BackendKind::Herdr,
             },
             SessionConfig {
+                core_command: Vec::new(),
                 id: "tmux-live".into(),
                 label: "tmux".into(),
                 socket_path: socket_path.to_string_lossy().into_owned(),
@@ -1425,6 +1435,7 @@ mod tests {
         async fn connected(&self) -> bool {
             let backend = crate::backend::TmuxBackend::with_binary(self.dir.join("tmux"), None);
             let session = SessionConfig {
+                core_command: Vec::new(),
                 id: "tmux".into(),
                 label: "tmux".into(),
                 socket_path: String::new(),
@@ -1496,6 +1507,7 @@ mod tests {
         }
         let socket = crate::short_test_socket("gw-conn");
         let session = SessionConfig {
+            core_command: Vec::new(),
             id: "tmux".into(),
             label: "tmux".into(),
             socket_path: socket.to_string_lossy().into_owned(),
