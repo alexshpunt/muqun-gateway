@@ -1,6 +1,142 @@
 //! Native-core protocol fixtures stand in for the separately installed core.
 
 #[tokio::test]
+async fn native_core_colored_viewport_uses_an_observer_without_input_or_resize() {
+    let socket = TestSocket::new();
+    let listener = tokio::net::UnixListener::bind(&socket.path).unwrap();
+    let serving = tokio::spawn(async move {
+        let (stream, _) = listener.accept().await.unwrap();
+        let mut stream = BufReader::new(stream);
+        let mut line = String::new();
+        stream.read_line(&mut line).await.unwrap();
+        let hello: Value = serde_json::from_str(&line).unwrap();
+        let framed = hello["params"]["framed"].as_bool().unwrap();
+        let reply = json!({"jsonrpc":"2.0","id":hello["id"],"result":{"generation":1,"framed":framed,"version":"0.1.18"}});
+        stream
+            .write_all(format!("{reply}\n").as_bytes())
+            .await
+            .unwrap();
+        if !framed {
+            line.clear();
+            stream.read_line(&mut line).await.unwrap();
+            let request: Value = serde_json::from_str(&line).unwrap();
+            assert_eq!(request["method"], "terminal.read");
+            let reply =
+                json!({"jsonrpc":"2.0","id":request["id"],"result":{"text":"red  蓝\nplain"}});
+            stream
+                .write_all(format!("{reply}\n").as_bytes())
+                .await
+                .unwrap();
+            return;
+        }
+        loop {
+            let (channel, kind, payload) = read_test_frame(&mut stream).await;
+            assert_eq!((channel, kind), (0, 0));
+            let request: Value = serde_json::from_slice(&payload).unwrap();
+            assert_eq!(request["params"]["terminal"], "worker/t7");
+            let result = match request["method"].as_str().unwrap() {
+                "terminal.get" => json!({"cols":20,"rows":3}),
+                "terminal.attach" => {
+                    assert_eq!(request["params"]["observe"], true);
+                    assert_eq!(request["params"]["history"], 0);
+                    assert_eq!(request["params"]["cols"], 20);
+                    assert_eq!(request["params"]["rows"], 3);
+                    json!({"channel":1,"terminal":{"cols":20,"rows":3}})
+                }
+                method => panic!("unexpected observer method: {method}"),
+            };
+            let reply = json!({"jsonrpc":"2.0","id":request["id"],"result":result});
+            write_test_frame(&mut stream, 0, 0, reply.to_string().as_bytes()).await;
+            if request["method"] == "terminal.attach" {
+                break;
+            }
+        }
+        for paint in [
+            b"\x1b[H\x1b[31mred\x1b[0m  \x1b[38;2;4;5;6m".as_slice(),
+            "蓝\x1b[0m\r\nplain\x1b[?9001l".as_bytes(),
+        ] {
+            write_test_frame(&mut stream, 1, 0, paint).await;
+        }
+        loop {
+            let (channel, kind, payload) = read_test_frame(&mut stream).await;
+            assert_eq!(channel, 1);
+            match kind {
+                1 => assert_eq!(payload.len(), 4),
+                2 => {
+                    write_test_frame(&mut stream, 1, 2, &[]).await;
+                    break;
+                }
+                _ => panic!("an observer must not send input, focus or resize"),
+            }
+        }
+    });
+    let backend = HerdrCoreBackend::with_command(socket.path.to_str().unwrap(), &[]);
+    let output = backend
+        .read_pane(&ReadPane {
+            pane_id: PaneId::new("hcp_d29ya2VyL3Q3"),
+            source: OutputSource::Visible,
+            format: OutputFormat::Ansi,
+            lines: 0,
+            start: None,
+            end: None,
+        })
+        .await
+        .unwrap();
+    let mut parsed = vt100::Parser::new(
+        std::num::NonZeroU16::new(3).unwrap(),
+        std::num::NonZeroU16::new(20).unwrap(),
+        0,
+    );
+    // API snapshots are logical lines, like the App renderer, not a raw TTY.
+    parsed.process(output.text.replace('\n', "\r\n").as_bytes());
+    assert_eq!(parsed.screen().contents().trim_end(), "red  蓝\nplain");
+    assert_eq!(
+        parsed.screen().cell(0, 0).unwrap().fgcolor(),
+        vt100::Color::Idx(1)
+    );
+    assert_eq!(
+        parsed.screen().cell(0, 5).unwrap().fgcolor(),
+        vt100::Color::Rgb(4, 5, 6)
+    );
+    assert!(!output.text.contains("\x1b[?"));
+    assert!(!output.text.contains("\x1b]"));
+    serving.await.unwrap();
+}
+
+#[tokio::test]
+async fn native_core_phone_composer_uses_one_guarded_send_without_legacy_enter() {
+    let core = CoreFixture::start();
+    let session: crate::SessionConfig = serde_json::from_value(json!({
+        "id":"native", "label":"Native", "backend":"herdr-core", "socket_path":core.socket.path
+    }))
+    .unwrap();
+    crate::agents::session_routes::submit_agent_prompt(
+        &session,
+        "hcp_d29ya2VyL3Q3",
+        "first\nsecond",
+    )
+    .await
+    .unwrap();
+    assert!(!crate::terminal_backend(&session)
+        .needs_submit_keypress()
+        .await
+        .unwrap());
+    let requests = core.requests.lock().unwrap();
+    let sends: Vec<_> = requests
+        .iter()
+        .filter(|r| r["method"] == "terminal.send")
+        .collect();
+    assert_eq!(sends.len(), 1);
+    assert_eq!(
+        sends[0]["params"],
+        json!({"terminal":"worker/t7","text":"first\nsecond","force":false,"wait":false})
+    );
+    assert!(requests
+        .iter()
+        .all(|r| matches!(r["method"].as_str(), Some("hello" | "terminal.send"))));
+}
+
+#[tokio::test]
 async fn native_core_refreshes_topology_on_subscription_events_and_missed_snapshots() {
     use tokio_stream::StreamExt;
     let core = CoreFixture::start();
@@ -33,6 +169,8 @@ async fn native_core_advertises_its_optional_backend_without_legacy_collaboratio
     let kind: BackendKind = serde_json::from_value(json!("herdr-core")).unwrap();
     let capabilities = crate::session_capabilities(kind, true, Some("0.1.18"));
     assert!(capabilities.contains(&"native_herdr_core_v1"));
+    assert!(capabilities.contains(&"native_agent_prompt_v1"));
+    assert!(capabilities.contains(&"native_ansi_viewport_v1"));
     assert!(!capabilities.contains(&"agent_collaboration"));
     assert!(crate::session_capabilities(kind, false, Some("0.1.18")).is_empty());
 }
@@ -271,6 +409,7 @@ impl CoreFixture {
                             "doc.get" => {
                                 json!({"version":1,"value":{"spaces":[{"id":"sp1","name":"Project","folder":"/work/project","tabs":[{"id":"tb1","name":"Review"}]}]}})
                             }
+                            "terminal.send" => json!({"turn":2,"started":true,"status":"idle"}),
                             "terminal.read" => {
                                 assert_eq!(request["params"]["terminal"], "worker/t7");
                                 assert_eq!(request["params"]["lines"], 0);
