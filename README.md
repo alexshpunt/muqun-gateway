@@ -639,6 +639,13 @@ address and asks you to update `listen` in the gateway's `config.json`, then
 restart. It never switches addresses automatically. If the pairing URL contains
 the old IP too, update that URL through `muqun-gateway manage`.
 
+### Native Herdr core
+
+The `herdr-core` backend connects to existing native terminals, including a
+core's connected machines. It uses the existing terminal API and keeps desktop
+focus separate from phone selection. See [Native Herdr core](docs/native-herdr-core.md)
+for configuration, compatibility and terminal-only limits.
+
 ### Optional terminal startup
 
 The installer separately asks whether configured terminal backends should start

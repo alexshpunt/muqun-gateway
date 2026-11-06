@@ -61,6 +61,9 @@ The retired `herdr.gateway` identifier remains only for migration compatibility.
     `TerminalBackend` port. The port is the test surface for synchronous terminal
     use cases, including topology, terminal I/O, agents, and optional worktrees.
   - `backend/herdr.rs`: Herdr protocol-17 socket adapter and subscription.
+  - `backend/herdr_core.rs`: native generation-1 core projection and event adapter;
+    `backend/herdr_core/wire.rs` owns bounded JSON-RPC/framing and non-replayed input.
+    Connection options and terminal-only limits are in `docs/native-herdr-core.md`.
   - `backend/tmux.rs`: argv-only tmux adapter and polling event source.
   - `backend/registry.rs`: static adapter registry for construction,
     availability checks, endpoint rendering, and setup defaults.
