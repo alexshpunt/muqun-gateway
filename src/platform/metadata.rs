@@ -274,7 +274,11 @@ pub(crate) fn session_capabilities(
     version: Option<&str>,
 ) -> Vec<&'static str> {
     if connected && kind == BackendKind::HerdrCore {
-        return vec!["native_herdr_core_v1"];
+        return vec![
+            "native_herdr_core_v1",
+            "native_agent_prompt_v1",
+            "native_ansi_viewport_v1",
+        ];
     }
     if connected
         && kind == BackendKind::Herdr

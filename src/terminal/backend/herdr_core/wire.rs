@@ -17,6 +17,14 @@ pub(super) struct Client {
     pub hello: Value,
 }
 
+struct Paint {
+    channel: u32,
+    cols: std::num::NonZeroU16,
+    rows: std::num::NonZeroU16,
+    bracketed: bool,
+    bytes: Vec<u8>,
+}
+
 impl Client {
     pub async fn open<S: AsyncRead + AsyncWrite + Unpin + Send + 'static>(
         stream: S,
@@ -183,20 +191,48 @@ impl Client {
         if text.len() as u64 > LIMIT - 12 {
             return Err(BackendError::InvalidResponse("core input length"));
         }
+        let paint = self.attach(terminal, false).await?;
+        let bytes = if mode == SendTextMode::Paste && paint.bracketed {
+            // Match core's paste sanitizer: embedded terminators cannot end a
+            // paste early and turn the remaining newlines into submissions.
+            format!("\x1b[200~{}\x1b[201~", text.replace("\x1b[201~", "")).into_bytes()
+        } else {
+            text.as_bytes().to_vec()
+        };
+        self.write_frame(paint.channel, 0, &bytes).await?;
+        self.detach(paint.channel).await
+    }
+
+    pub async fn viewport_ansi(&mut self, terminal: &str) -> Result<String, BackendError> {
+        let paint = self.attach(terminal, true).await?;
+        let mut parser = vt100::Parser::new(paint.rows, paint.cols, 0);
+        parser.process(&paint.bytes);
+        self.detach(paint.channel).await?;
+        // The App consumes logical rows with SGR, not a raw terminal repaint.
+        // This exporter preserves colors, styles and gaps without cursor/OSC modes.
+        Ok(parser.screen().contents_formatted_basic())
+    }
+
+    async fn attach(&mut self, terminal: &str, observe: bool) -> Result<Paint, BackendError> {
         let geometry = self
             .call("terminal.get", json!({"terminal":terminal}))
             .await?;
-        let cols = geometry["cols"]
-            .as_u64()
-            .filter(|n| (1..=65535).contains(n))
-            .ok_or(BackendError::InvalidResponse("core columns"))?;
-        let rows = geometry["rows"]
-            .as_u64()
-            .filter(|n| (1..=65535).contains(n))
-            .ok_or(BackendError::InvalidResponse("core rows"))?;
-        // Resumed attach does not take size ownership until this viewer actually
-        // types. Keep the existing grid and never send FOCUS, RESIZE or FACTS.
-        let attached = self.call("terminal.attach", json!({"terminal":terminal,"cols":cols,"rows":rows,"history":0,"observe":false,"resumed":true})).await?;
+        let dimension = |field: &str| {
+            geometry[field]
+                .as_u64()
+                .and_then(|n| u16::try_from(n).ok())
+                .and_then(std::num::NonZeroU16::new)
+                .ok_or(BackendError::InvalidResponse("core geometry"))
+        };
+        let cols = dimension("cols")?;
+        let rows = dimension("rows")?;
+        // Bound the observer's terminal model independently of the wire payload.
+        if observe && u64::from(cols.get()) * u64::from(rows.get()) > LIMIT / 64 {
+            return Err(BackendError::InvalidResponse("core viewport cells"));
+        }
+        // Observers cannot own geometry; resumed input keeps the current grid.
+        // Neither path sends FOCUS, RESIZE or FACTS.
+        let attached = self.call("terminal.attach", json!({"terminal":terminal,"cols":cols.get(),"rows":rows.get(),"history":0,"observe":observe,"resumed":true})).await?;
         let channel = attached["channel"]
             .as_u64()
             .and_then(|n| u32::try_from(n).ok())
@@ -205,6 +241,7 @@ impl Client {
         let mut parser = vte::Parser::new();
         let mut modes = Modes::default();
         let mut paint_bytes = 0u64;
+        let mut bytes = Vec::new();
         // Core appends mode 9001 after the authoritative first paint. Parsing
         // with vte preserves split CSI sequences and ignores mode-like OSC text.
         while !modes.paint_complete {
@@ -217,17 +254,22 @@ impl Client {
                 return Err(BackendError::InvalidResponse("core paint length"));
             }
             parser.advance(&mut modes, &payload);
+            if observe {
+                bytes.extend_from_slice(&payload);
+            }
             self.write_frame(channel, 1, &(payload.len() as u32).to_le_bytes())
                 .await?;
         }
-        let bytes = if mode == SendTextMode::Paste && modes.bracketed {
-            // Match core's paste sanitizer: embedded terminators cannot end a
-            // paste early and turn the remaining newlines into submissions.
-            format!("\x1b[200~{}\x1b[201~", text.replace("\x1b[201~", "")).into_bytes()
-        } else {
-            text.as_bytes().to_vec()
-        };
-        self.write_frame(channel, 0, &bytes).await?;
+        Ok(Paint {
+            channel,
+            cols,
+            rows,
+            bracketed: modes.bracketed,
+            bytes,
+        })
+    }
+
+    async fn detach(&mut self, channel: u32) -> Result<(), BackendError> {
         self.write_frame(channel, 2, &[]).await?;
         loop {
             let (incoming, kind, payload) = self.read_frame().await?;
