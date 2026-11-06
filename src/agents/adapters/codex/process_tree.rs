@@ -408,7 +408,11 @@ mod tests {
         let mut unreadable = 0;
         for _ in 0..60 {
             let mut child = std::process::Command::new("/bin/sh")
-                .args(["-c", "exec /bin/sleep 0.05"])
+                .args(["-c", "exec /bin/cat"])
+                // Keep the child alive until sampling ends, even if this
+                // thread is descheduled longer than the observation window.
+                .stdin(std::process::Stdio::piped())
+                .stdout(std::process::Stdio::null())
                 .spawn()
                 .unwrap();
             let pid = child.id();
@@ -416,6 +420,7 @@ mod tests {
             while std::time::Instant::now() < end {
                 unreadable += usize::from(identity(pid).is_none());
             }
+            drop(child.stdin.take());
             child.wait().unwrap();
         }
         assert_eq!(unreadable, 0, "identity() lost a live process mid-exec");

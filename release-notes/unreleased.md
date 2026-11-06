@@ -2,6 +2,17 @@
 
 ## Changes and fixes
 
+- Added the optional `herdr-core` terminal backend for native protocol generation 1,
+  with herdr-core 0.1.18 as its baseline. Existing projects, tabs and terminal
+  status are projected through the terminal API. Paste-only input preserves
+  bracketed paste and requires a separate Enter. Reads do not scroll the native
+  terminal or change desktop focus. Connected sessions declare
+  `native_herdr_core_v1`; native history paging, desktop topology changes,
+  agent startup and host-local filesystem operations remain unsupported.
+  Existing Herdr TUI and tmux backends are unchanged. Apps use the existing
+  terminal routes and Gateway compatibility verdict. Restart Gateway after
+  configuration changes; preserve pairing identity and transport policy.
+
 - **Large videos can be uploaded in chunks, up to 1 GiB, without the Gateway
   buffering the file.** `POST /api/uploads` reads its whole body into memory
   (and a sealed body cannot be streamed), which is why it stops at 64 MiB.
