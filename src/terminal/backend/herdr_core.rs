@@ -28,11 +28,6 @@ pub struct HerdrCoreBackend {
 }
 
 impl HerdrCoreBackend {
-    #[cfg(test)]
-    pub fn new(socket: &str) -> Self {
-        Self::with_command(socket, &[])
-    }
-
     pub fn with_command(socket: &str, command: &[String]) -> Self {
         Self {
             socket: socket.into(),
