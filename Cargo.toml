@@ -51,6 +51,8 @@ tracing-subscriber = { version = "0.3.20", default-features = false, features = 
 unicode-segmentation = "1.13.3"
 # Parse native-core paint modes across frames without interpreting OSC titles as keys.
 vte = { version = "0.15.0", default-features = false }
+# Normalize observer paints to SGR-only viewport text for existing App renderers.
+vt100 = { version = "0.18.1", default-features = false }
 uuid = { version = "1.29.0", features = ["v4"] }
 argon2 = { version = "0.6.0", default-features = false, features = ["alloc"] }
 # `rustls-tls-webpki-roots`: a linked peer at an `https://` URL is followed

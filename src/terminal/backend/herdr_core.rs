@@ -433,13 +433,26 @@ impl TerminalBackend for HerdrCoreBackend {
     fn read_pane<'a>(&'a self, request: &'a ReadPane) -> BackendFuture<'a, PaneOutput> {
         Box::pin(async move {
             let terminal = native(request.pane_id.as_str(), "p")?;
-            let response = self
-                .call("terminal.read", json!({"terminal":terminal,"lines":0}))
-                .await?;
-            let text = response["text"]
-                .as_str()
-                .ok_or(BackendError::InvalidResponse("core screen"))?
-                .to_owned();
+            let text = if request.format == OutputFormat::Ansi {
+                tokio::time::timeout(DEADLINE, async {
+                    let _slot = RPC_SLOTS
+                        .acquire()
+                        .await
+                        .map_err(|_| BackendError::Unavailable)?;
+                    let mut client = self.connect(true).await?;
+                    client.viewport_ansi(&terminal).await
+                })
+                .await
+                .map_err(|_| BackendError::Unavailable)??
+            } else {
+                let response = self
+                    .call("terminal.read", json!({"terminal":terminal,"lines":0}))
+                    .await?;
+                response["text"]
+                    .as_str()
+                    .ok_or(BackendError::InvalidResponse("core screen"))?
+                    .to_owned()
+            };
             Ok(PaneOutput {
                 text,
                 revision: None,
@@ -513,6 +526,21 @@ impl TerminalBackend for HerdrCoreBackend {
         })
     }
     unsupported!(focus_agent(target: &'a str) -> ());
-    unsupported!(prompt_agent(target: &'a str, text: &'a str) -> ());
+    fn prompt_agent<'a>(&'a self, target: &'a str, text: &'a str) -> BackendFuture<'a, ()> {
+        Box::pin(async move {
+            let terminal = native(target, "p")?;
+            // Core owns paste, the submit key and its human-input/blocked guards.
+            // An ambiguous response is never replayed by Gateway.
+            self.call(
+                "terminal.send",
+                json!({"terminal":terminal,"text":text,"force":false,"wait":false}),
+            )
+            .await?;
+            Ok(())
+        })
+    }
+    fn needs_submit_keypress(&self) -> BackendFuture<'_, bool> {
+        Box::pin(async { Ok(false) })
+    }
     unsupported!(start_agent(request: &'a StartAgent) -> StartedAgent);
 }
