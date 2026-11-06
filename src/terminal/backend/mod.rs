@@ -8,6 +8,8 @@ mod herdr;
 mod herdr_core;
 mod keys;
 mod model;
+#[cfg(all(test, unix))]
+mod native_contract_tests;
 mod process_identity;
 mod registry;
 mod tmux;
