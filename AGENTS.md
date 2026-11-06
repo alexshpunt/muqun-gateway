@@ -6,12 +6,15 @@ pull request. Run `cargo fmt --all -- --check`, `cargo clippy --all-targets
 -- -D warnings`, and `cargo test --locked`; report the actual results.
 Do not open a ready PR with failed or missing checks.
 
-Agent startup and prompt-delivery changes also require a real paired App check against
-an isolated Herdr session, not just mocked protocol replies. Verify readiness before
-submission, an actual response, follow-up delivery, and preservation of the original
-terminal focus. On the development Mac, run `proxy_on` in a new terminal before starting
-AI agents. Ask before answering trust/approval prompts; never use the main Herdr session
-for experiments or automatically retry an ambiguous prompt submission.
+Agent startup and prompt-delivery changes require real paired App evidence, not
+just mocked protocol replies. Verify readiness before submission, an actual response,
+follow-up delivery, and preservation of the original terminal focus. Use an isolated
+Herdr session for agent-driven experiments. A user's normal interaction with an
+existing session can establish App delivery and rendering; record what it proves
+and do not request a duplicate scripted check for the same behavior. Verify remaining
+gaps independently without injecting test input into working sessions. On the
+development Mac, run `proxy_on` in a new terminal before starting AI agents. Ask before
+answering trust/approval prompts; never automatically retry an ambiguous submission.
 
 ## Releases
 
