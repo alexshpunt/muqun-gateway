@@ -2,6 +2,17 @@
 
 ## Changes and fixes
 
+- Fixed native-core App composer delivery through the core's guarded
+  `terminal.send`. A prompt includes one submission key, respects the human-input
+  quiet rule and refuses blocked programs. Gateway does not force dialogs,
+  replay an ambiguous send or add its legacy Enter retry. Connected native
+  sessions declare `native_agent_prompt_v1`.
+- Native-core ANSI viewport reads preserve colors and styles through a read-only
+  observer snapshot. Reads do not send input, focus or resize frames. Connected
+  native sessions declare `native_ansi_viewport_v1`; plain output remains
+  available. Existing App endpoints and pairing files are unchanged. Restart
+  Gateway after replacing the binary.
+
 - Added the optional `herdr-core` terminal backend for native protocol generation 1,
   with herdr-core 0.1.18 as its baseline. Existing projects, tabs and terminal
   status are projected through the terminal API. Paste-only input preserves

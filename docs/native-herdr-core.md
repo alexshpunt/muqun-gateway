@@ -73,21 +73,31 @@ mode sends the text bytes without paste markers. `send-keys` uses the core's
 mode-aware key encoder; unsupported names are refused before any key is sent.
 The core's human-input quiet rule also applies to named-key RPC calls.
 
+The App's agent composer uses the core's guarded `terminal.send`: paste and
+one submission key, with the native human-input quiet rule and blocked-program
+refusal. Gateway never forces a blocked program or adds its legacy Enter retry.
+An ambiguous response is reported without replaying the prompt.
+
+ANSI output uses a read-only observer snapshot and preserves screen colors and
+styles as SGR text. Plain output remains available. Observer reads request no
+history and send no input, focus or resize frames.
+
 Input uses the terminal's existing grid. It sends no resize or focus frames.
 A lost connection or an ambiguous acknowledgement fails the request without
 replaying the input. Reconnecting re-reads the terminal and layout state.
 
 ## Capabilities and limits
 
-Connected native backends declare `native_herdr_core_v1` in their session
+Connected native backends declare `native_herdr_core_v1`,
+`native_agent_prompt_v1` and `native_ansi_viewport_v1` in their session
 capabilities. The existing HTTP/SSE endpoints and legacy `herdr` compatibility
 envelope remain available for Apps that accept a Gateway-declared backend.
 The native generation is reported in `backend.protocol`.
 
 This backend supports existing terminal discovery, status, viewport output,
-text input, named keys and topology events. It does not create, close, rename,
-split or focus desktop projects or terminals. Agent startup, agent-protocol
-prompt submission, worktrees and collaboration are unsupported.
+text input, guarded prompts to existing agents, named keys and topology events.
+It does not create, close, rename, split or focus desktop projects or terminals.
+Agent startup, worktrees and collaboration are unsupported.
 
 Core paths belong to that core's filesystem namespace. They are not supplied
 as Gateway-host working directories or checkout roots. Native panes therefore
