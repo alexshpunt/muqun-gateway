@@ -2039,7 +2039,7 @@ fn print_manage_screen(
                 &std::env::var("PATH").unwrap_or_default(),
                 service_path.as_deref(),
             ),
-            BackendKind::Herdr => String::from("Herdr socket configured"),
+            BackendKind::Herdr | BackendKind::HerdrCore => String::from("Herdr socket configured"),
         })
         .collect::<Vec<_>>();
     let qr_result =

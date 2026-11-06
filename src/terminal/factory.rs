@@ -66,10 +66,11 @@ pub(crate) fn warn_about_missing_backend_programs(config: &Config) {
 /// remember. herdr sessions are returned unwrapped: herdr's own ids already
 /// work today and must not change.
 pub(crate) fn terminal_backend(session: &SessionConfig) -> Box<dyn TerminalBackend> {
-    let backend = backend_registry().connect(session.backend, &session.socket_path);
+    let backend =
+        backend_registry().connect(session.backend, &session.socket_path, &session.core_command);
     match session.backend {
         BackendKind::Tmux => Box::new(TmuxWireIds::new(backend)),
-        BackendKind::Herdr => backend,
+        BackendKind::Herdr | BackendKind::HerdrCore => backend,
     }
 }
 

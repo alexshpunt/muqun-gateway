@@ -303,6 +303,7 @@ mod tests {
         };
         let mut state = test_state("admin", vec![test_device("qa", "token")]);
         state.config.sessions = vec![SessionConfig {
+            core_command: Vec::new(),
             id: "default".into(),
             label: "QA".into(),
             socket_path: socket.to_string_lossy().into_owned(),

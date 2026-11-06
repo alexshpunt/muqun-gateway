@@ -46,6 +46,10 @@ fn herdr_roots() -> Vec<PathBuf> {
 }
 
 pub(crate) fn validate(session: &SessionConfig) -> anyhow::Result<()> {
+    anyhow::ensure!(
+        session.backend != BackendKind::HerdrCore,
+        "native core is attach-only; start it outside Gateway"
+    );
     if session.backend == BackendKind::Herdr {
         herdr_session(Path::new(&session.socket_path), &herdr_roots())?;
     }
@@ -174,6 +178,7 @@ fn systemd_scoped(direct: Command, unit: &str, under_systemd: bool) -> Command {
 async fn start(session: &SessionConfig) -> anyhow::Result<()> {
     validate(session)?;
     match session.backend {
+        BackendKind::HerdrCore => anyhow::bail!("native core is attach-only"),
         BackendKind::Tmux => {
             let mut probe = tmux_command(&session.socket_path);
             // list-sessions never creates a server. Reuse any existing sessions.
@@ -338,13 +343,18 @@ mod tests {
         let dir = PathBuf::from("/tmp").join(format!("muqun-startup-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir(&dir).unwrap();
         let session = SessionConfig {
+            core_command: Vec::new(),
             id: "qa".into(),
             label: "QA".into(),
             backend: BackendKind::Tmux,
             socket_path: dir.join("tmux.sock").to_string_lossy().into_owned(),
         };
         let result = async {
-            let backend = crate::backend_registry().connect(session.backend, &session.socket_path);
+            let backend = crate::backend_registry().connect(
+                session.backend,
+                &session.socket_path,
+                &session.core_command,
+            );
             anyhow::ensure!(!backend.probe_reachable().await.unwrap());
             start(&session).await?;
             anyhow::ensure!(backend.probe_reachable().await.unwrap());
@@ -370,7 +380,7 @@ mod tests {
             .status()
             .await;
         assert!(!crate::backend_registry()
-            .connect(session.backend, &session.socket_path)
+            .connect(session.backend, &session.socket_path, &session.core_command)
             .probe_reachable()
             .await
             .unwrap());
@@ -390,6 +400,7 @@ mod tests {
             .join(&name)
             .join("herdr.sock");
         let session = SessionConfig {
+            core_command: Vec::new(),
             id: "qa".into(),
             label: "QA".into(),
             backend: BackendKind::Herdr,
@@ -398,7 +409,8 @@ mod tests {
         let result = async {
             start(&session).await?;
             let registry = crate::backend_registry();
-            let backend = registry.connect(session.backend, &session.socket_path);
+            let backend =
+                registry.connect(session.backend, &session.socket_path, &session.core_command);
             backend
                 .metadata()
                 .await

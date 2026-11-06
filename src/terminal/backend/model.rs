@@ -43,6 +43,8 @@ pub enum BackendKind {
     #[default]
     Herdr,
     Tmux,
+    #[serde(rename = "herdr-core")]
+    HerdrCore,
 }
 
 /// Whether a backend's self-reported version is at least `minimum`.
@@ -76,6 +78,7 @@ impl BackendKind {
         match self {
             Self::Herdr => "herdr",
             Self::Tmux => "tmux",
+            Self::HerdrCore => "herdr-core",
         }
     }
 }

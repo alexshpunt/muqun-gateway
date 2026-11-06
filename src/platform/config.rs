@@ -15,6 +15,7 @@ use crate::backend::BackendKind;
 pub(crate) enum SetupBackend {
     Herdr,
     Tmux,
+    HerdrCore,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
@@ -39,6 +40,7 @@ impl From<SetupBackend> for BackendKind {
         match value {
             SetupBackend::Herdr => Self::Herdr,
             SetupBackend::Tmux => Self::Tmux,
+            SetupBackend::HerdrCore => Self::HerdrCore,
         }
     }
 }
@@ -455,6 +457,9 @@ pub(crate) struct SessionConfig {
     pub(crate) id: String,
     pub(crate) label: String,
     pub(crate) socket_path: String,
+    /// Explicit argv of a binary-transparent core bridge. No shell is added.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) core_command: Vec<String>,
     /// Omitted for every existing config, where Herdr remains the default.
     #[serde(default, skip_serializing_if = "BackendKind::is_herdr")]
     pub(crate) backend: BackendKind,

@@ -4569,6 +4569,7 @@ mod tests {
         let token = "device-token";
         let mut state = test_state("admin", vec![test_device("phone-1", token)]);
         state.config.sessions = vec![SessionConfig {
+            core_command: Vec::new(),
             id: "default".into(),
             label: "Default".into(),
             socket_path: socket.to_string_lossy().into_owned(),
@@ -5400,6 +5401,7 @@ mod tests {
         };
         let mut state = test_state("admin", vec![test_device("phone-1", "device-token")]);
         state.config.sessions = vec![SessionConfig {
+            core_command: Vec::new(),
             id: "default".into(),
             label: "Default".into(),
             socket_path: socket.to_string_lossy().into_owned(),

@@ -10,7 +10,7 @@ use std::process::Command;
 
 use anyhow::Context as _;
 
-use super::{BackendKind, HerdrBackend, TerminalBackend, TmuxBackend};
+use super::{BackendKind, HerdrBackend, HerdrCoreBackend, TerminalBackend, TmuxBackend};
 
 pub struct BackendRegistry {
     herdr_default_socket: String,
@@ -23,9 +23,17 @@ impl BackendRegistry {
         }
     }
 
-    pub fn connect(&self, kind: BackendKind, socket_path: &str) -> Box<dyn TerminalBackend> {
+    pub fn connect(
+        &self,
+        kind: BackendKind,
+        socket_path: &str,
+        core_command: &[String],
+    ) -> Box<dyn TerminalBackend> {
         match kind {
             BackendKind::Herdr => Box::new(HerdrBackend::new(socket_path)),
+            BackendKind::HerdrCore => {
+                Box::new(HerdrCoreBackend::with_command(socket_path, core_command))
+            }
             BackendKind::Tmux => Box::new(TmuxBackend::new(
                 (!socket_path.is_empty()).then(|| PathBuf::from(socket_path)),
             )),
@@ -35,6 +43,7 @@ impl BackendRegistry {
     pub fn default_socket(&self, kind: BackendKind) -> String {
         match kind {
             BackendKind::Herdr => self.herdr_default_socket.clone(),
+            BackendKind::HerdrCore => native_core_socket(),
             BackendKind::Tmux => String::new(),
         }
     }
@@ -42,6 +51,7 @@ impl BackendRegistry {
     pub fn default_label(&self, kind: BackendKind) -> &'static str {
         match kind {
             BackendKind::Herdr => "Herdr",
+            BackendKind::HerdrCore => "Herdr core",
             BackendKind::Tmux => "tmux",
         }
     }
@@ -55,7 +65,7 @@ impl BackendRegistry {
 
     pub fn ensure_available(&self, kind: BackendKind) -> anyhow::Result<()> {
         match kind {
-            BackendKind::Herdr => Ok(()),
+            BackendKind::Herdr | BackendKind::HerdrCore => Ok(()),
             BackendKind::Tmux => {
                 // Resolved rather than spawned by name, so that a failure here
                 // can say which PATH was searched. This check runs in the
@@ -83,6 +93,41 @@ impl BackendRegistry {
     }
 }
 
+fn native_core_socket() -> String {
+    if let Some(socket) = std::env::var_os("HC_SOCKET").filter(|v| !v.is_empty()) {
+        return socket.to_string_lossy().into_owned();
+    }
+    #[cfg(unix)]
+    {
+        let run = std::env::var_os("XDG_RUNTIME_DIR")
+            .filter(|v| !v.is_empty())
+            .map(PathBuf::from)
+            .or_else(|| {
+                // SAFETY: getuid has no preconditions and does not mutate process state.
+                let path = PathBuf::from(format!("/run/user/{}", unsafe { libc::getuid() }));
+                path.is_dir().then_some(path)
+            });
+        run.map(|p| p.join("herdr-core"))
+            .unwrap_or_else(|| {
+                std::env::var_os("XDG_STATE_HOME")
+                    .map(PathBuf::from)
+                    .unwrap_or_else(|| dirs::home_dir().unwrap_or_default().join(".local/share"))
+                    .join("herdr-core/default")
+            })
+            .join("default.sock")
+            .to_string_lossy()
+            .into_owned()
+    }
+    #[cfg(windows)]
+    {
+        let user: String = std::env::var("USERNAME")
+            .unwrap_or_default()
+            .chars()
+            .filter(char::is_ascii_alphanumeric)
+            .collect();
+        format!(r"\\.\pipe\herdr-core-{user}-default.sock")
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
